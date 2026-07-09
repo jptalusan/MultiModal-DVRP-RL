@@ -14,9 +14,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from dvrp_core.env.library import make_env
-
-from dvrp_rl.scenario import build_spec, load_config
+from dvrp_rl.env import make_env_from_config
 
 DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "configs" / "binghampton.yaml"
 N_STEPS = 200
@@ -25,11 +23,9 @@ N_STEPS = 200
 def main() -> None:
     config_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_CONFIG
     print(f"config: {config_path}")
-
-    spec = build_spec(load_config(config_path))
     print("building env (first run fetches + caches the OSM graph under cache/) ...")
 
-    env, policy = make_env(spec, solver="greedy", policy="on_demand_only", demand="uniform", seed=42)
+    env, policy = make_env_from_config(config_path, seed=42)
     state = env.reset()
     print(f"env ready · vehicles: {len(state.vehicles)} · t0: {state.current_time:.1f}s")
 

@@ -31,6 +31,19 @@ def test_spec_builds_with_required_keys(config_path):
     assert isinstance(spec["depots"], list) and spec["depots"]
 
 
+def test_area_polygon_is_passed_through_verbatim():
+    poly = {"type": "Polygon", "coordinates": [[[-90, 35], [-89, 35], [-89, 36], [-90, 35]]]}
+    config = {"area": {"polygon": poly}, "depots": [{"name": "d"}],
+              "request_rate": 0.02, "detour_tolerance": 4.0}
+    assert build_spec(config)["polygon"] is poly
+
+
+def test_area_without_polygon_or_bbox_raises():
+    config = {"area": {}, "depots": [{"name": "d"}], "request_rate": 0.02, "detour_tolerance": 4.0}
+    with pytest.raises(ValueError, match="polygon.*bbox"):
+        build_spec(config)
+
+
 @pytest.mark.parametrize("config_path", CONFIGS, ids=[p.stem for p in CONFIGS])
 def test_depot_is_inside_the_polygon(config_path):
     """A depot outside the polygon silently snaps to the nearest node — guard it."""

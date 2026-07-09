@@ -9,9 +9,11 @@ the learning code.
 > agent against MOSAIC — on a small area with uniform demand — in one command,
 > without touching the MOSAIC source or its backend.
 
-See [`plan.md`](plan.md) for goals, milestones, and design decisions.
-**Status: M0 (bootstrap).** The dependency is proven end to end; baselines and
-a learned policy come next (M2–M3).
+See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
+[`needs.md`](needs.md) for gaps in MOSAIC we work around (we don't modify it).
+**Status: M1 (env + features layer).** Dependency proven, config→env wrapper
+and a State→feature vector are in place. Baselines and a learned policy come
+next (M2–M3).
 
 ## Access to MOSAIC
 
@@ -64,7 +66,12 @@ pytest -m network          # full end-to-end episode (first run fetches OSM)
 configs/          scenario configs (polygon, depot, fleet, demand, seeds)
 src/dvrp_rl/
   scenario.py     config YAML -> MOSAIC make_env spec dict
+  env.py          config -> (env, policy); the one place that imports MOSAIC's builder
+  features.py     State -> fixed feature vector (geography-free)
 examples/
   run_demo.py     the one-command entry point
-tests/            offline spec tests + network-marked smoke test
+tests/            offline scenario/feature tests + network-marked env/smoke tests
 ```
+
+The Gymnasium adapter (for SB3/RLlib) is intentionally deferred — see
+`needs.md`. Our v0 policies drive MOSAIC's env directly.
