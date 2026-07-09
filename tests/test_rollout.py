@@ -84,13 +84,35 @@ def test_accept_without_bind_raises():
 CONFIG = Path(__file__).resolve().parent.parent / "configs" / "binghampton.yaml"
 
 
+class _CountingRollout(RolloutPolicy):
+    """RolloutPolicy that counts how many requests it rejects."""
+
+    def __init__(self, horizon: int = 30):
+        super().__init__(horizon=horizon)
+        self.rejects = 0
+
+    def create_trips(self, state):
+        action = super().create_trips(state)
+        if action is None:
+            self.rejects += 1
+        return action
+
+
 @pytest.mark.network
-def test_rollout_matches_or_beats_accept_all():
-    """Plan M3 exit criterion: the learner's service rate >= the baseline."""
-    from dvrp_rl.evaluate import evaluate
+def test_rollout_beats_accept_all_and_actually_rejects():
+    """Plan M3 exit gate. Two conditions so a *degenerate always-accept* rollout
+    (which would merely tie AcceptAll) fails:
+      (a) rollout's mean service rate is STRICTLY greater than AcceptAll's;
+      (b) the rollout genuinely rejects >= 1 request over an episode.
+    """
+    from dvrp_rl.evaluate import evaluate, run_episode
     from dvrp_rl.policies import AcceptAll
 
-    seeds = [100, 101]
-    accept = evaluate(CONFIG, lambda _s: AcceptAll(), seeds, n_steps=150)
-    rollout = evaluate(CONFIG, lambda _s: RolloutPolicy(horizon=20), seeds, n_steps=150)
-    assert rollout["mean_service_rate"] >= accept["mean_service_rate"]
+    seeds = [100, 101, 102]
+    accept = evaluate(CONFIG, lambda _s: AcceptAll(), seeds, n_steps=300)
+    rollout = evaluate(CONFIG, lambda _s: RolloutPolicy(horizon=30), seeds, n_steps=300)
+    assert rollout["mean_service_rate"] > accept["mean_service_rate"]
+
+    counter = _CountingRollout(horizon=30)
+    run_episode(CONFIG, counter, seed=100, n_steps=300)
+    assert counter.rejects >= 1, "rollout degenerated to always-accept"

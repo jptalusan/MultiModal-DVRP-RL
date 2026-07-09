@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from statistics import mean, pstdev
+from statistics import mean, stdev
 from typing import Any, Callable
 
 from dvrp_core.policy import Policy
@@ -62,7 +62,8 @@ def evaluate(
     rates = [e["service_rate"] for e in episodes]
     return {
         "mean_service_rate": mean(rates),
-        "std_service_rate": pstdev(rates),
+        # sample std (n-1); undefined for a single seed
+        "std_service_rate": stdev(rates) if len(rates) > 1 else 0.0,
         "episodes": episodes,
     }
 

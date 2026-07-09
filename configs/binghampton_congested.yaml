@@ -1,0 +1,27 @@
+# Binghampton, congested — same area/fleet as binghampton.yaml but 3x demand,
+# so the fleet saturates and greedy accept-all clearly leaves service on the
+# table. Used to show AcceptAll is NOT trivially optimal (see RESULTS.md).
+area:
+  bbox:
+    south: 35.14
+    west: -89.99
+    north: 35.16
+    east: -89.95
+
+depots:
+  - name: Binghampton
+    lat: 35.15
+    lon: -89.97
+    num_vehicles: 3
+    vehicle_capacity: 4
+
+demand: uniform
+request_rate: 0.06          # 3x binghampton.yaml -> saturated fleet
+detour_tolerance: 4.0
+max_walk_time: 600.0
+max_wait_time: 1800.0
+
+random_seed: 42
+seeds:
+  train: [0, 1, 2, 3]
+  eval: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]

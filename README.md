@@ -11,11 +11,13 @@ the learning code.
 
 See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
 [`needs.md`](needs.md) for gaps in MOSAIC we work around (we don't modify it).
-**Status: M3 (a learned policy beats the baseline).** Dependency proven,
+**Status: M3 (a planning policy beats the baseline).** Dependency proven,
 config→env wrapper, feature layer, `AcceptAll`/`Random` baselines, and a
-`Rollout` policy that plans via MOSAIC's deepcopy. On the Binghampton box:
-`Rollout` **92.9%** > `AcceptAll` **90.2%** > `Random(0.5)` **49.4%** (and the
-gap widens under congestion). See [`RESULTS.md`](RESULTS.md) for the full table.
+`Rollout` planner (one-step lookahead via MOSAIC's deepcopy). On the Binghampton
+box `Rollout` **91.6%** > `AcceptAll` **88.1%** > `Random(0.5)` **48.8%**, winning
+10/10 seeds (+3.5pp; +6.8pp under congestion). Note `Rollout` is an **oracle
+upper bound** — it plans with perfect foresight of future demand (see the caveat
+in [`RESULTS.md`](RESULTS.md)); a deployable learner is the next step.
 
 ## Access to MOSAIC
 
@@ -55,17 +57,46 @@ caches it under `cache/` (needs network once; subsequent runs reuse the
 pickle). It runs one short uniform-demand episode with MOSAIC's stock
 `on_demand_only` policy and prints the service rate.
 
-Compare the baselines across the config's eval seeds:
+Compare all policies across the config's eval seeds:
 
 ```bash
-python -m dvrp_rl.evaluate                     # AcceptAll vs Random(0.5)
+python -m dvrp_rl.evaluate                     # AcceptAll vs Random(0.5) vs Rollout(H=30)
+python -m dvrp_rl.evaluate configs/nashville.yaml
 ```
+
+## Reproducing the results
+
+The numbers in [`RESULTS.md`](RESULTS.md) come straight from the command above.
+On `configs/binghampton.yaml` (eval seeds `[100…109]`, 300 steps/episode, MOSAIC
+`v0.1.1-rc.1`, `greedy` solver) you should see:
+
+```
+AcceptAll      service_rate: 88.1% ± 2.3%
+Random(0.5)    service_rate: 48.8% ± 2.8%
+Rollout(H=30)  service_rate: 91.6% ± 1.5%
+```
+
+`Rollout` wins 10/10 seeds vs `AcceptAll` (paired, +3.5pp mean). Run
+`python -m dvrp_rl.evaluate configs/binghampton_congested.yaml` for the 3×-demand
+comparison (+6.8pp).
+
+**Determinism:** results are reproducible for a fixed `(config, seed)` — the
+demand stream is seeded, so re-running yields identical service rates (within a
+cached graph; see the determinism note in `plan.md`). `Rollout` is ~50× slower
+than `AcceptAll` (it clones + simulates the env twice per request); expect
+~11 s/episode on the Binghampton box.
+
+`Rollout` is a MOSAIC-`Policy` subclass injected via `make_env(policy=…)`, so it
+reuses MOSAIC's scenario/geography/demand/solver plumbing unchanged — it plans
+by deep-copying the live env, never by modifying the simulator. **It is an oracle
+planner** (the deepcopy carries the seeded demand RNG, so it sees future demand);
+treat its rate as an upper bound, not a deployable result.
 
 ## Test
 
 ```bash
-pytest -m "not network"    # fast, offline: spec building + depot-in-polygon
-pytest -m network          # full end-to-end episode (first run fetches OSM)
+pytest -m "not network"    # fast, offline: scenario/features/policies + rollout decision rule
+pytest -m network          # real-env: episode, injection, eval harness, Rollout ≥ AcceptAll gate
 ```
 
 ## Layout
