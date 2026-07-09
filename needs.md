@@ -31,6 +31,22 @@ own length — not fleet geometry (e.g. how far the nearest idle vehicle is).
 (nearest-vehicle slack, detour cost of insertion) are out of reach for a
 policy and we stick to time-window + fleet-aggregate features.
 
+## 1b. No public "clone for planning" hook (rollout policy)
+
+`RolloutPolicy` plans by `copy.deepcopy`-ing the live env. To do that well it
+reaches into private attributes, because MOSAIC exposes no planning API:
+- `env._geography` — pinned in the deepcopy `memo` so the (large, read-only)
+  road graph + travel-time matrix are *shared*, not copied.
+- `env._event_log` — detached before the copy (it grows per step; copying it
+  makes per-decision cost O(n) in episode length).
+- `env._demand_model._rng` — reseeded on the clone to sample a *different*
+  future (non-oracle planning). Without this, the deepcopy carries the seeded
+  RNG and the rollout replays the true future (perfect foresight).
+
+**What would remove the gap.** A public `env.clone_for_planning(*, resample_demand=…)`
+that shares immutable geography, drops the event log, and optionally reseeds
+demand — would let us stop touching private state.
+
 ## 2. `DVRPEnv` is not a `gymnasium.Env`
 
 **What it is.** `env.reset()` returns a bare `State` (not `(obs, info)`)

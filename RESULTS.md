@@ -5,43 +5,57 @@ MOSAIC's `env.metrics.service_rate` = served requests / total requests
 (policy-rejected requests count as unserved).
 
 **Reproduce:** `python -m dvrp_rl.evaluate [config.yaml]` (uses the config's
-`eval` seeds). Numbers below are from the committed configs, unchanged.
+`eval` seeds; the sampled rollout takes a few minutes).
 
-> **Oracle caveat for `Rollout`.** The rollout plans by `deepcopy`-ing the env,
-> which copies the *seeded demand RNG* — so it decides each request with
-> **perfect foresight of all future demand**. This makes its accept-vs-reject
-> A/B fair (both branches replay the identical future), but it is an
-> **upper-bound / oracle planner, not a deployable dispatcher** (a real system
-> can't see the future). Read `Rollout`'s rate as a ceiling, not a shippable
-> number. It is also not a *learned* policy — it's a one-step-lookahead
-> (Bertsekas) rollout of the `AcceptAll` base, so beating/tying `AcceptAll` is
-> expected by construction; the question is the size of the lift.
+## The two rollout modes
+
+`Rollout` is a one-step-lookahead (Bertsekas) planner over the `AcceptAll` base
+— **not** a learned policy. It has two modes:
+
+- **oracle** (`oracle=True`) — the clone keeps the env's seeded demand RNG, so it
+  plans against the *true* future: **perfect foresight**. An upper bound, not
+  deployable. Use it to measure the value of planning if demand were known.
+- **sampled** (default) — the clone's demand RNG is *reseeded*, so it plans
+  against *sampled, plausible* futures from the same distribution — never the
+  real one. Averaged over `K` futures with common random numbers. Reproducible
+  for a fixed `sample_seed` (seeded), but not an oracle. This is the honest,
+  deployable-style planner.
 
 ## Scenario: Binghampton (`configs/binghampton.yaml`)
 
-- Area: ~2 km Memphis box (approximate — see plan.md TODO). Depot: 1, fleet 3 × cap 4.
-- Demand: `uniform`, `request_rate=0.02`. Eval seeds: `[100…109]` (10). 300 steps/episode.
+- Area: ~2 km Memphis box (approximate — see plan.md). Depot: 1, fleet 3 × cap 4.
+- Demand: `uniform`, `request_rate=0.02`. Eval seeds `[100…104]` (5). 300 steps/episode.
 - Environment: MOSAIC `dvrp-gym @ v0.1.1-rc.1`, solver `greedy`.
 
-| Policy | Service rate (mean ± sample std) | Milestone | Notes |
+| Policy | Service rate (mean ± sample std) | vs AcceptAll | Notes |
 |---|---|---|---|
-| `AcceptAll` | 88.1% ± 2.3% | M2 | Accept every request; equals MOSAIC's stock `on_demand_only`. The baseline to beat. |
-| `Random(0.5)` | 48.8% ± 2.8% | M2 | Accept each request w.p. 0.5 (seeded per episode). |
-| `Rollout(H=30)` | **91.6% ± 1.5%** | M3 | 1-step lookahead: sim accept vs reject 30 steps ahead (AcceptAll base), pick more-served branch. Oracle planner (see caveat). ~11 s/episode (~50× AcceptAll). |
-| RL (REINFORCE) | _pending_ | M3+ | To follow — a *deployable* (no-foresight) learner. |
+| `AcceptAll` | 88.6% ± 2.3% | — | Baseline; equals MOSAIC's stock `on_demand_only`. |
+| `Random(0.5)` | 49.5% ± 0.8% | −39pp | Accept each request w.p. 0.5. |
+| `Rollout` **oracle** (H=30) | **91.7% ± 2.0%** | **+3.1pp, wins 5/5** | Perfect-foresight upper bound. |
+| `Rollout` **sampled** (H=30, K=5) | 81.7% ± 4.0% | −6.9pp, wins 0/5 | Honest planner; see below. |
+| RL (REINFORCE) | _pending_ | — | Deployable learner — next (plan.md). |
 
-**Rollout vs AcceptAll is a paired comparison** (identical per-seed demand):
-`Rollout` wins **10/10 seeds**, mean paired delta **+3.5pp** (per-seed deltas
-range +0.7…+6.0pp). 10/10 same-direction wins is a sign-test p≈0.001, so the
-lift is real, if modest — at low congestion `AcceptAll` is already near-optimal,
-and the rollout only helps on the rare request whose acceptance blocks others.
+**Reading this:** planning *with* foresight beats the baseline (+3.1pp) — that's
+the ceiling. The honest **sampled** planner currently does *worse* than
+AcceptAll: with only a few sampled futures it sacrifices a real, servable request
+to keep capacity free for *hypothetical* future requests that don't materialize.
+This is mostly variance, and shrinks as `K` grows:
 
-### Congestion check (`configs/binghampton_congested.yaml`, `request_rate=0.06`, 3× demand)
+| Sampled rollout | Δ vs AcceptAll (3 seeds, 150 steps) |
+|---|---|
+| K=5 | −6.2pp |
+| K=20 | −2.7pp |
 
-Accept-all is **not** trivially optimal — when the fleet saturates the rollout's
-edge grows. Same 10 seeds, 300 steps:
+Closing the gap needs many (expensive) samples or variance reduction — which is
+exactly the case for a **learned** policy (REINFORCE) that amortizes the planning
+into a fast, foresight-free decision. That's the next milestone.
 
-| Policy | Service rate | Notes |
+### Congestion check (`configs/binghampton_congested.yaml`, `request_rate=0.06`, 3×)
+
+Accept-all is **not** trivially optimal — with a saturated fleet the oracle's
+ceiling widens (same 5 seeds, 300 steps):
+
+| Policy | Service rate | vs AcceptAll |
 |---|---|---|
-| `AcceptAll` | 42.0% ± 2.9% | greedy acceptance blocks the fleet |
-| `Rollout(H=30)` | **48.8% ± 2.5%** | **+6.8pp** mean paired delta, wins **10/10 seeds**, by rejecting requests that would saturate vehicles |
+| `AcceptAll` | 42.9% ± 2.6% | — |
+| `Rollout` **oracle** (H=30) | **50.1% ± 2.8%** | **+7.2pp, wins 5/5** |

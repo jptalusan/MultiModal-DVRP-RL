@@ -11,13 +11,13 @@ the learning code.
 
 See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
 [`needs.md`](needs.md) for gaps in MOSAIC we work around (we don't modify it).
-**Status: M3 (a planning policy beats the baseline).** Dependency proven,
-config→env wrapper, feature layer, `AcceptAll`/`Random` baselines, and a
-`Rollout` planner (one-step lookahead via MOSAIC's deepcopy). On the Binghampton
-box `Rollout` **91.6%** > `AcceptAll` **88.1%** > `Random(0.5)` **48.8%**, winning
-10/10 seeds (+3.5pp; +6.8pp under congestion). Note `Rollout` is an **oracle
-upper bound** — it plans with perfect foresight of future demand (see the caveat
-in [`RESULTS.md`](RESULTS.md)); a deployable learner is the next step.
+**Status: M3 (rollout planner).** Dependency proven, config→env wrapper, feature
+layer, `AcceptAll`/`Random` baselines, and a `Rollout` planner (one-step
+lookahead via MOSAIC's deepcopy) with two modes: **oracle** (perfect future
+foresight — an upper bound) beats `AcceptAll` **91.7% vs 88.6%** (+3.1pp, +7.2pp
+under congestion); **sampled** (honest, plans against sampled futures — no
+foresight) currently trails the baseline and improves with more samples. This
+motivates a learned policy (REINFORCE) next. See [`RESULTS.md`](RESULTS.md).
 
 ## Access to MOSAIC
 
@@ -67,30 +67,28 @@ python -m dvrp_rl.evaluate configs/nashville.yaml
 ## Reproducing the results
 
 The numbers in [`RESULTS.md`](RESULTS.md) come straight from the command above.
-On `configs/binghampton.yaml` (eval seeds `[100…109]`, 300 steps/episode, MOSAIC
-`v0.1.1-rc.1`, `greedy` solver) you should see:
+On `configs/binghampton.yaml` (eval seeds `[100…104]`, 300 steps/episode, MOSAIC
+`v0.1.1-rc.1`, `greedy` solver) you should see roughly:
 
 ```
-AcceptAll      service_rate: 88.1% ± 2.3%
-Random(0.5)    service_rate: 48.8% ± 2.8%
-Rollout(H=30)  service_rate: 91.6% ± 1.5%
+AcceptAll               service_rate: 88.6% ± 2.3%
+Random(0.5)             service_rate: 49.5% ± 0.8%
+Rollout(oracle)         service_rate: 91.7% ± 2.0%   # perfect-foresight upper bound
+Rollout(sampled,K=5)    service_rate: 81.7% ± 4.0%   # honest, no foresight
 ```
 
-`Rollout` wins 10/10 seeds vs `AcceptAll` (paired, +3.5pp mean). Run
-`python -m dvrp_rl.evaluate configs/binghampton_congested.yaml` for the 3×-demand
-comparison (+6.8pp).
+Run `python -m dvrp_rl.evaluate configs/binghampton_congested.yaml` for the
+3×-demand comparison (oracle +7.2pp).
 
-**Determinism:** results are reproducible for a fixed `(config, seed)` — the
-demand stream is seeded, so re-running yields identical service rates (within a
-cached graph; see the determinism note in `plan.md`). `Rollout` is ~50× slower
-than `AcceptAll` (it clones + simulates the env twice per request); expect
-~11 s/episode on the Binghampton box.
+**Determinism:** reproducible for a fixed `(config, seed)` — the demand stream is
+seeded, so re-running yields identical service rates (within a cached graph; see
+`plan.md`). The sampled rollout is *also* reproducible (its future-sampling is
+seeded) yet is **not** an oracle — it never sees the true future. `Rollout` is
+~10–50× slower than `AcceptAll` (K clones + simulations per request).
 
 `Rollout` is a MOSAIC-`Policy` subclass injected via `make_env(policy=…)`, so it
-reuses MOSAIC's scenario/geography/demand/solver plumbing unchanged — it plans
-by deep-copying the live env, never by modifying the simulator. **It is an oracle
-planner** (the deepcopy carries the seeded demand RNG, so it sees future demand);
-treat its rate as an upper bound, not a deployable result.
+reuses MOSAIC's scenario/geography/demand/solver plumbing unchanged — it plans by
+deep-copying the live env, never by modifying the simulator.
 
 ## Test
 

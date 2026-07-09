@@ -87,8 +87,8 @@ CONFIG = Path(__file__).resolve().parent.parent / "configs" / "binghampton.yaml"
 class _CountingRollout(RolloutPolicy):
     """RolloutPolicy that counts how many requests it rejects."""
 
-    def __init__(self, horizon: int = 30):
-        super().__init__(horizon=horizon)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.rejects = 0
 
     def create_trips(self, state):
@@ -99,20 +99,38 @@ class _CountingRollout(RolloutPolicy):
 
 
 @pytest.mark.network
-def test_rollout_beats_accept_all_and_actually_rejects():
-    """Plan M3 exit gate. Two conditions so a *degenerate always-accept* rollout
-    (which would merely tie AcceptAll) fails:
-      (a) rollout's mean service rate is STRICTLY greater than AcceptAll's;
-      (b) the rollout genuinely rejects >= 1 request over an episode.
+def test_oracle_rollout_beats_accept_all_and_actually_rejects():
+    """M3 exit gate for the ORACLE planner (perfect foresight). Two conditions
+    so a degenerate always-accept rollout (which would merely tie AcceptAll)
+    fails: (a) STRICTLY higher mean service rate; (b) it rejects >= 1 request.
+    (The sampled rollout is not expected to beat AcceptAll — see RESULTS.md.)
     """
     from dvrp_rl.evaluate import evaluate, run_episode
     from dvrp_rl.policies import AcceptAll
 
     seeds = [100, 101, 102]
     accept = evaluate(CONFIG, lambda _s: AcceptAll(), seeds, n_steps=300)
-    rollout = evaluate(CONFIG, lambda _s: RolloutPolicy(horizon=30), seeds, n_steps=300)
-    assert rollout["mean_service_rate"] > accept["mean_service_rate"]
+    oracle = evaluate(CONFIG, lambda _s: RolloutPolicy(horizon=30, oracle=True), seeds, n_steps=300)
+    assert oracle["mean_service_rate"] > accept["mean_service_rate"]
 
-    counter = _CountingRollout(horizon=30)
+    counter = _CountingRollout(horizon=30, oracle=True)
     run_episode(CONFIG, counter, seed=100, n_steps=300)
-    assert counter.rejects >= 1, "rollout degenerated to always-accept"
+    assert counter.rejects >= 1, "oracle rollout degenerated to always-accept"
+
+
+@pytest.mark.network
+def test_sampled_rollout_is_non_oracle_and_reproducible():
+    """The default (sampled) rollout must (a) be reproducible for a fixed
+    sample_seed, and (b) actually depend on the sampled future — different
+    sample_seeds give different results — i.e. it is NOT using the true future.
+    """
+    from dvrp_rl.evaluate import run_episode
+
+    def rate(sample_seed):
+        return run_episode(
+            CONFIG, RolloutPolicy(horizon=15, n_samples=3, sample_seed=sample_seed),
+            seed=100, n_steps=80,
+        )["service_rate"]
+
+    assert rate(7) == rate(7), "sampled rollout must be reproducible for a fixed sample_seed"
+    assert rate(7) != rate(999), "different sample_seeds should differ — proves it's not the true future"

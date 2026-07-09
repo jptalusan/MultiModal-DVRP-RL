@@ -140,9 +140,35 @@ MultiModal-DVRP-RL/
   reporting `service_rate` across seeds. Establishes the baseline number.
 - **M3 — One learned policy beats the baseline.** MCTS-rollout (recommended) or
   simple RL, wired via `make_env(policy=…)`. Show a clear service-rate lift vs M2.
+- **M3+ — Deployable learned policy (REINFORCE).** A small policy-gradient
+  learner (logistic / 1–2-layer MLP) over `features.py` (geography-free) that
+  decides accept/reject from the *current* state only — no env cloning, no
+  foresight. Trained on the true demand distribution to amortize what the
+  sampled rollout does expensively per-decision. *Exit:* a deployable (no-oracle)
+  policy that beats `AcceptAll` on eval seeds, wired via `make_env(policy=…)`.
 - **M4 — README walkthrough + reproducibility.** Anyone clones → installs →
-  `python examples/run_demo.py` → sees the learner train/evaluate and beat baseline.
+  `python examples/run_demo.py` → sees a policy evaluate and beat baseline.
+  (Partly done: reproducibility section + configs that reproduce RESULTS.md.)
 - **M5 (optional) — Second approach / SB3 via the Gym adapter.**
+
+## Progress log
+
+- **M0 ✅** Repo skeleton, `pyproject` pinning `v0.1.1-rc.1`, README, smoke test.
+  Proven: install works, `run_demo.py` runs one episode.
+- **M1 ✅** `scenario.py`, `env.py` (config→env), `features.py` (4-feature,
+  geography-free vector). Gym adapter deferred (see needs.md), not built.
+- **M2 ✅** `AcceptAll`/`Random` baselines + `evaluate.py`. Baseline established.
+- **M3 ✅ (with an honest caveat)** `RolloutPolicy` — one-step lookahead via
+  MOSAIC deepcopy. Verify-fleet (2 testers + 2 reviewers) confirmed the code
+  correct. Two modes:
+  - *oracle* (perfect future foresight): beats `AcceptAll` +3.1pp (Binghampton),
+    +7.2pp congested — the planning ceiling, **not deployable**.
+  - *sampled* (default; reseeds demand RNG → plans against sampled, not-real
+    futures): the honest, deployable-style planner. Currently *trails* AcceptAll
+    (−6.9pp at K=5) because it sacrifices real requests for hypothetical ones;
+    the gap shrinks with more samples (−2.7pp at K=20). Motivates M3+.
+  See RESULTS.md for numbers. Repo public: github.com/jptalusan/MultiModal-DVRP-RL.
+- **M3+ / M4 / M5** — pending (see above).
 
 ## Development workflow — the full repertoire (required per milestone)
 

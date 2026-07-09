@@ -29,4 +29,6 @@ max_wait_time: 1800.0
 random_seed: 42
 seeds:
   train: [0, 1, 2, 3]
-  eval: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+  # 5 eval seeds keeps `python -m dvrp_rl.evaluate` tractable — the sampled
+  # rollout does K clones per decision and is ~1 min/episode.
+  eval: [100, 101, 102, 103, 104]

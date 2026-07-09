@@ -71,16 +71,20 @@ def evaluate(
 def main() -> None:
     config = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_CONFIG
     seeds = load_config(config).get("seeds", {}).get("eval", [0, 1, 2])
-    print(f"config: {config}\nseeds: {seeds}\n")
+    print(f"config: {config}\nseeds: {seeds}")
+    print("(the sampled rollout does K clones/decision — expect a few minutes)\n")
 
     contenders: dict[str, Callable[[int], Policy]] = {
         "AcceptAll": lambda _s: AcceptAll(),
         "Random(0.5)": lambda s: RandomPolicy(accept_prob=0.5, seed=s),
-        "Rollout(H=30)": lambda _s: RolloutPolicy(horizon=30),
+        # oracle = perfect future foresight (upper bound); sampled = honest,
+        # plans against sampled futures (deployable-style). See RESULTS.md.
+        "Rollout(oracle)": lambda _s: RolloutPolicy(horizon=30, oracle=True),
+        "Rollout(sampled,K=5)": lambda s: RolloutPolicy(horizon=30, n_samples=5, sample_seed=s),
     }
     for name, make_policy in contenders.items():
         res = evaluate(config, make_policy, seeds)
-        print(f"{name:<14} service_rate: {res['mean_service_rate']:.1%} ± {res['std_service_rate']:.1%}")
+        print(f"{name:<22} service_rate: {res['mean_service_rate']:.1%} ± {res['std_service_rate']:.1%}")
 
 
 if __name__ == "__main__":
