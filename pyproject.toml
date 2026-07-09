@@ -18,6 +18,12 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
 ]
+# For running notebooks/demo.ipynb (and executing it in CI/verification).
+notebook = [
+    "nbconvert>=7.0",
+    "ipykernel>=6.0",
+    "jupyterlab>=4.0",
+]
 # Only if we want the OR-Tools solver baseline later:
 # ortools = ["dvrp-gym[ortools]"]
 

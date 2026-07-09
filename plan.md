@@ -186,7 +186,12 @@ MultiModal-DVRP-RL/
     (−6.9pp at K=5) because it sacrifices real requests for hypothetical ones;
     the gap shrinks with more samples (−2.7pp at K=20). Motivates M3+.
   See RESULTS.md for numbers. Repo public: github.com/jptalusan/MultiModal-DVRP-RL.
-- **M3+ / M4 / M5** — pending (see above).
+- **M4 ✅** Packaging: README overhaul (MOSAIC pip+git install with *both* SSH and
+  HTTPS-token auth paths, `run_demo`/`evaluate` usage, `oracle` vs sampled docs);
+  `notebooks/demo.ipynb` (env → episode → baselines → fast rollout, commented) with
+  a `[notebook]` extra, executed clean via `nbconvert`; fresh-venv clean install +
+  `run_demo` verified from scratch (prime directive holds).
+- **M3+ / M5** — pending (M3+ REINFORCE is next).
 
 ## Development workflow — the full repertoire (required per milestone)
 
