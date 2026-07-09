@@ -1,0 +1,32 @@
+# Binghampton, Memphis — small on-demand-only scenario (v0).
+#
+# TODO (M1, flagged in plan.md): finalize the exact polygon against the real
+# neighborhood. This bbox is the plan's *approximate* Binghampton box, kept
+# deliberately small (~2 km) so the first-run OSM fetch + shortest-path queries
+# stay fast. Known-good fallback: the Nashville box in configs/nashville.yaml.
+area:
+  bbox:
+    south: 35.14
+    west: -89.99
+    north: 35.16
+    east: -89.95
+
+# 1 depot inside the polygon; a few small vehicles. Config, not hardcoded.
+depots:
+  - name: Binghampton
+    lat: 35.15
+    lon: -89.97
+    num_vehicles: 3
+    vehicle_capacity: 4
+
+# Uniform demand: seed-reproducible, good for train/eval splits by seed.
+demand: uniform
+request_rate: 0.02          # Poisson arrivals; ~1 request / 50 s
+detour_tolerance: 4.0
+max_walk_time: 600.0
+max_wait_time: 1800.0
+
+random_seed: 42
+seeds:
+  train: [0, 1, 2, 3]
+  eval: [100, 101, 102]

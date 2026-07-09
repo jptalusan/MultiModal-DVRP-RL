@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      # Installing dvrp-gym pulls from a private GitHub repo over SSH.
+      # CI needs a deploy key / token with read access to smarttransit-ai/MOSAIC
+      # (see README "Access to MOSAIC"). Without it, `uv sync` cannot resolve
+      # the git dependency.
+      - name: Install (with dev extras)
+        run: uv sync --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      # Network-marked tests (first-run OSM fetch) are excluded — they're
+      # flaky/slow in CI until we ship a committed graph cache (see plan.md
+      # risks: "First-run OSM fetch"). Non-network tests must pass.
+      - name: Test (no network)
+        run: uv run pytest -m "not network"

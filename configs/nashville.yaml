@@ -1,0 +1,28 @@
+# Nashville box — known-good scenario from MOSAIC's quickstart.
+# Use as a fallback when validating the pipeline independent of the
+# still-being-finalized Binghampton polygon. Larger area → slower first-run
+# OSM fetch than binghampton.yaml.
+area:
+  bbox:
+    south: 36.13
+    west: -86.82
+    north: 36.19
+    east: -86.74
+
+depots:
+  - name: Downtown
+    lat: 36.162
+    lon: -86.781
+    num_vehicles: 4
+    vehicle_capacity: 4
+
+demand: uniform
+request_rate: 0.02
+detour_tolerance: 4.0
+max_walk_time: 600.0
+max_wait_time: 1800.0
+
+random_seed: 42
+seeds:
+  train: [0, 1, 2, 3]
+  eval: [100, 101, 102]

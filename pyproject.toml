@@ -1,0 +1,45 @@
+[project]
+name = "multimodal-dvrp-rl"
+version = "0.0.1"
+description = "Learn a dispatch policy (RL/MCTS) against the MOSAIC DVRP simulator."
+requires-python = ">=3.12"
+dependencies = [
+    # The MOSAIC simulator IS our environment. Pin the exact rc tag — never a
+    # moving branch. Bump deliberately when MOSAIC cuts a newer rc / real v0.1.1.
+    # Base install only: no [api] extra (backend/uvicorn/DB) — we don't need it.
+    "dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1-rc.1",
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+# Only if we want the OR-Tools solver baseline later:
+# ortools = ["dvrp-gym[ortools]"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dvrp_rl"]
+
+# The MOSAIC dependency is a direct git reference (URL), which hatchling
+# refuses to build against unless this is explicitly allowed.
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "network: test needs network + a first-run OSM fetch (skipped in CI by default)",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src", "tests"]
