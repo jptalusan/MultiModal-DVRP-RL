@@ -146,9 +146,27 @@ MultiModal-DVRP-RL/
   foresight. Trained on the true demand distribution to amortize what the
   sampled rollout does expensively per-decision. *Exit:* a deployable (no-oracle)
   policy that beats `AcceptAll` on eval seeds, wired via `make_env(policy=…)`.
-- **M4 — README walkthrough + reproducibility.** Anyone clones → installs →
-  `python examples/run_demo.py` → sees a policy evaluate and beat baseline.
-  (Partly done: reproducibility section + configs that reproduce RESULTS.md.)
+- **M4 — README walkthrough + reproducibility + demo notebook.** Anyone clones →
+  installs → `python examples/run_demo.py` → sees a policy evaluate and beat the
+  baseline. Partly done (reproducibility section + configs that reproduce
+  RESULTS.md). Remaining steps (do BEFORE M3+):
+  1. **README — MOSAIC install via pip+git.** Document *both* auth paths, since
+     org membership grants access but git still needs a credential: (a) SSH — the
+     `git+ssh://` URL in `pyproject`, requires an SSH key on your (org-member)
+     account (`ssh -T git@github.com`); (b) HTTPS+token — for org members who
+     don't use SSH. Include the exact `uv`/`pip` commands, `allow-direct-references`,
+     same-version `--force-reinstall`, and a private-repo 403/permission troubleshooting note.
+  2. **README — usage.** `run_demo` description (OSM first-run/cache, expected
+     output); policy usage incl. `oracle=True` vs sampled (`n_samples`, `horizon`,
+     `sample_seed`), what each means, and the deterministic-demand guard.
+  3. **`notebooks/demo.ipynb`** — markdown + commented cells, sectioned:
+     setup/build-env, one demo episode, baselines (AcceptAll/Random via
+     `evaluate`), fast MCTS demo (oracle + sampled at tiny horizon/steps — for
+     demonstration, not benchmarking), pointer to RESULTS.md + REINFORCE next.
+     Add a `[notebook]` extra (jupyter/nbconvert); verify via `nbconvert --execute`.
+  4. **Packaging.** Fresh-venv clean-install test (prime directive), OSM-cache
+     note for fresh clones/CI, README layout/status → M4, plan.md progress update.
+  *Verify:* clean `uv venv` + install + `run_demo` from scratch; notebook executes.
 - **M5 (optional) — Second approach / SB3 via the Gym adapter.**
 
 ## Progress log
