@@ -11,9 +11,10 @@ the learning code.
 
 See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
 [`needs.md`](needs.md) for gaps in MOSAIC we work around (we don't modify it).
-**Status: M1 (env + features layer).** Dependency proven, config→env wrapper
-and a State→feature vector are in place. Baselines and a learned policy come
-next (M2–M3).
+**Status: M2 (baselines + evaluation).** Dependency proven, config→env
+wrapper, feature layer, and `AcceptAll`/`Random` baselines with an evaluation
+harness are in place. On the Binghampton box, `AcceptAll` serves **~90%** and
+`Random(0.5)` **~49%** — the number M3's learned policy must beat.
 
 ## Access to MOSAIC
 
@@ -53,6 +54,12 @@ caches it under `cache/` (needs network once; subsequent runs reuse the
 pickle). It runs one short uniform-demand episode with MOSAIC's stock
 `on_demand_only` policy and prints the service rate.
 
+Compare the baselines across the config's eval seeds:
+
+```bash
+python -m dvrp_rl.evaluate                     # AcceptAll vs Random(0.5)
+```
+
 ## Test
 
 ```bash
@@ -68,9 +75,11 @@ src/dvrp_rl/
   scenario.py     config YAML -> MOSAIC make_env spec dict
   env.py          config -> (env, policy); the one place that imports MOSAIC's builder
   features.py     State -> fixed feature vector (geography-free)
+  policies/       AcceptRejectPolicy base + AcceptAll / Random baselines
+  evaluate.py     run N seeds per policy, report service_rate (python -m dvrp_rl.evaluate)
 examples/
   run_demo.py     the one-command entry point
-tests/            offline scenario/feature tests + network-marked env/smoke tests
+tests/            offline scenario/feature/policy tests + network-marked env/eval/smoke tests
 ```
 
 The Gymnasium adapter (for SB3/RLlib) is intentionally deferred — see
