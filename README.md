@@ -14,7 +14,8 @@ See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
 **Status: M2 (baselines + evaluation).** Dependency proven, config→env
 wrapper, feature layer, and `AcceptAll`/`Random` baselines with an evaluation
 harness are in place. On the Binghampton box, `AcceptAll` serves **~90%** and
-`Random(0.5)` **~49%** — the number M3's learned policy must beat.
+`Random(0.5)` **~49%** — the number M3's learned policy must beat. See
+[`RESULTS.md`](RESULTS.md) for the running benchmark table.
 
 ## Access to MOSAIC
 
