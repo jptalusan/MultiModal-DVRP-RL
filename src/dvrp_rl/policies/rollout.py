@@ -59,8 +59,24 @@ class RolloutPolicy(AcceptRejectPolicy):
         self._env = None
 
     def bind_env(self, env) -> None:
-        """Give the policy the env to plan against (cloned once per decision)."""
+        """Give the policy the env to plan against (cloned once per decision).
+
+        In sampled (non-oracle) mode this refuses *deterministic* demand: if
+        reseeding the demand RNG can't change the future (no ``_rng``, or a
+        file/replay model that ignores it), the rollout would silently replay
+        the TRUE future — a hidden oracle. We raise rather than mislabel it.
+        """
         self._env = env
+        if not self.oracle:
+            dm = getattr(env, "_demand_model", None)
+            name = type(dm).__name__
+            if dm is None or not hasattr(dm, "_rng") or "File" in name or "Replay" in name:
+                raise RuntimeError(
+                    f"sampled rollout (oracle=False) needs stochastic, RNG-driven demand; "
+                    f"demand model {name!r} looks deterministic — reseeding would be a no-op "
+                    f"and the rollout would silently replay the true future. Use oracle=True, "
+                    f"or a stochastic demand (e.g. uniform)."
+                )
 
     def _clone(self):
         env = self._env

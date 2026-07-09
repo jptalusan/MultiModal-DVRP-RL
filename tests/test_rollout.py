@@ -57,7 +57,9 @@ class _FakeEnv:
 
 
 def _bound(accept_val: int, reject_val: int) -> RolloutPolicy:
-    p = RolloutPolicy(horizon=5)
+    # oracle=True: the comparison logic is identical to sampled mode, and it
+    # skips the demand-reseed the fake env has no model for.
+    p = RolloutPolicy(horizon=5, oracle=True)
     p.bind_env(_FakeEnv(accept_val, reject_val))
     return p
 
@@ -76,7 +78,14 @@ def test_ties_favor_accept():
 
 def test_accept_without_bind_raises():
     with pytest.raises(RuntimeError):
-        RolloutPolicy().accept(_state())
+        RolloutPolicy(oracle=True).accept(_state())
+
+
+def test_sampled_mode_refuses_deterministic_demand():
+    """Sampled mode must fail loudly (not silently become an oracle) when the
+    demand can't be resampled — here the fake env has no demand model."""
+    with pytest.raises(RuntimeError, match="stochastic"):
+        RolloutPolicy(horizon=5).bind_env(_FakeEnv(1, 1))
 
 
 # --- real-env gate ---------------------------------------------------------
