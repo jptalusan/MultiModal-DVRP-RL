@@ -17,7 +17,7 @@ from typing import Any, Callable
 from dvrp_core.policy import Policy
 
 from dvrp_rl.env import make_env_from_config
-from dvrp_rl.policies import AcceptAll, RandomPolicy
+from dvrp_rl.policies import AcceptAll, RandomPolicy, RolloutPolicy
 from dvrp_rl.scenario import load_config
 
 DEFAULT_CONFIG = Path(__file__).resolve().parent.parent.parent / "configs" / "binghampton.yaml"
@@ -27,6 +27,8 @@ N_STEPS = 300
 def run_episode(config: str | Path | dict, policy: Policy, *, seed: int, n_steps: int = N_STEPS) -> dict[str, Any]:
     """Run one episode with ``policy`` on the demand stream fixed by ``seed``."""
     env, policy = make_env_from_config(config, policy=policy, seed=seed)
+    if hasattr(policy, "bind_env"):
+        policy.bind_env(env)  # planning policies (rollout) clone this env per decision
     state = env.reset()
     for _ in range(n_steps):
         state, _reward, done, _info = env.step(policy.create_trips(state))
@@ -73,6 +75,7 @@ def main() -> None:
     contenders: dict[str, Callable[[int], Policy]] = {
         "AcceptAll": lambda _s: AcceptAll(),
         "Random(0.5)": lambda s: RandomPolicy(accept_prob=0.5, seed=s),
+        "Rollout(H=30)": lambda _s: RolloutPolicy(horizon=30),
     }
     for name, make_policy in contenders.items():
         res = evaluate(config, make_policy, seeds)

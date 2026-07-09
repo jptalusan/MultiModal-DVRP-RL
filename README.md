@@ -11,11 +11,11 @@ the learning code.
 
 See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
 [`needs.md`](needs.md) for gaps in MOSAIC we work around (we don't modify it).
-**Status: M2 (baselines + evaluation).** Dependency proven, config→env
-wrapper, feature layer, and `AcceptAll`/`Random` baselines with an evaluation
-harness are in place. On the Binghampton box, `AcceptAll` serves **~90%** and
-`Random(0.5)` **~49%** — the number M3's learned policy must beat. See
-[`RESULTS.md`](RESULTS.md) for the running benchmark table.
+**Status: M3 (a learned policy beats the baseline).** Dependency proven,
+config→env wrapper, feature layer, `AcceptAll`/`Random` baselines, and a
+`Rollout` policy that plans via MOSAIC's deepcopy. On the Binghampton box:
+`Rollout` **92.9%** > `AcceptAll` **90.2%** > `Random(0.5)` **49.4%** (and the
+gap widens under congestion). See [`RESULTS.md`](RESULTS.md) for the full table.
 
 ## Access to MOSAIC
 
@@ -76,7 +76,7 @@ src/dvrp_rl/
   scenario.py     config YAML -> MOSAIC make_env spec dict
   env.py          config -> (env, policy); the one place that imports MOSAIC's builder
   features.py     State -> fixed feature vector (geography-free)
-  policies/       AcceptRejectPolicy base + AcceptAll / Random baselines
+  policies/       AcceptRejectPolicy base + AcceptAll / Random baselines + Rollout planner
   evaluate.py     run N seeds per policy, report service_rate (python -m dvrp_rl.evaluate)
 examples/
   run_demo.py     the one-command entry point
