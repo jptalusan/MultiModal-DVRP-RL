@@ -92,6 +92,13 @@ python -m dvrp_rl.evaluate configs/nashville.yaml
 python -m dvrp_rl.evaluate configs/binghampton_congested.yaml   # 3× demand
 ```
 
+Train the learned (REINFORCE) policy and compare it to the baseline on held-out
+seeds:
+
+```bash
+python -m dvrp_rl.train                        # trains, saves to models/, evals vs AcceptAll
+```
+
 ## Policies
 
 All policies are MOSAIC `Policy` subclasses; for `on_demand_only` each decides
@@ -102,6 +109,7 @@ All policies are MOSAIC `Policy` subclasses; for `on_demand_only` each decides
 | `AcceptAll` | Accept every request. The baseline to beat (= MOSAIC's stock policy). |
 | `RandomPolicy(accept_prob, seed)` | Accept each request with a fixed probability. |
 | `RolloutPolicy(horizon, oracle, n_samples, sample_seed)` | One-step lookahead: simulate accept vs reject `horizon` steps ahead on env clones, take the branch that serves more. |
+| `ReinforcePolicy(detour_tolerance, weights, bias)` | Learned linear-logistic policy over the feature vector — decides from the current state only (no foresight, no cloning). Train with `python -m dvrp_rl.train`. |
 
 `RolloutPolicy` has two modes:
 
@@ -174,8 +182,11 @@ The Gymnasium adapter (for SB3/RLlib) is intentionally deferred — see
 
 ## Roadmap
 
-Done: install + env wrapper, feature layer, `AcceptAll`/`Random` baselines, and a
-`Rollout` planner (oracle beats `AcceptAll`; the honest sampled variant trails and
-improves with more samples). **Next: a learned policy (REINFORCE)** — deployable,
-foresight-free, decides from the feature vector alone. Design notes and milestones
-live in [`plan.md`](plan.md); MOSAIC gaps we work around are in [`needs.md`](needs.md).
+Done: install + env wrapper, feature layer, `AcceptAll`/`Random` baselines, a
+`Rollout` planner (oracle beats `AcceptAll`; honest sampled variant trails and
+improves with more samples), and a deployable **REINFORCE** policy — which
+*matches* accept-all but doesn't beat it (accept-all is near-optimal here; the
+beneficial-reject signal needs foresight or richer features). **Next lever:
+geometric features** (nearest-vehicle slack / insertion cost) to give a learned
+policy a discriminative signal. Design notes and milestones are in
+[`plan.md`](plan.md); MOSAIC gaps we work around are in [`needs.md`](needs.md).

@@ -191,7 +191,19 @@ MultiModal-DVRP-RL/
   `notebooks/demo.ipynb` (env → episode → baselines → fast rollout, commented) with
   a `[notebook]` extra, executed clean via `nbconvert`; fresh-venv clean install +
   `run_demo` verified from scratch (prime directive holds).
-- **M3+ / M5** — pending (M3+ REINFORCE is next).
+- **M3+ ✅ (honest negative result)** `ReinforcePolicy` (deployable linear-logistic
+  policy over the geography-free features, decides from the current state only —
+  no foresight/cloning) + `train.py` (REINFORCE, EMA baseline, train/eval seed
+  split). Robustly **converges to accept-all and ties the baseline (88.6%); does
+  not beat it** — across warm-start/lr/entropy/episode sweeps it either matches
+  accept-all or over-rejects. Accept-all is near-optimal here; the beneficial-
+  reject signal needs foresight (oracle) or richer *geometric* features. The
+  deployable-learner infrastructure is in place and correct.
+- **M3++ (proposed next) — geometric features.** Give the learner nearest-vehicle
+  slack / insertion detour cost (via the `env._geography` hook in needs.md) so it
+  can discriminate "this request blocks others" without foresight. The concrete
+  lever to actually beat accept-all.
+- **M5 (optional)** — SB3/RLlib via the Gym adapter. Pending.
 
 ## Development workflow — the full repertoire (required per milestone)
 

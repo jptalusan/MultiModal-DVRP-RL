@@ -13,3 +13,6 @@ venv/
 htmlcov/
 build/
 dist/
+
+# Trained model artifacts (regenerate with python -m dvrp_rl.train)
+models/
