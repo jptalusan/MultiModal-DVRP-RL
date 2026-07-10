@@ -9,16 +9,8 @@ the learning code.
 > agent against MOSAIC — on a small area with uniform demand — in one command,
 > without touching the MOSAIC source or its backend.
 
-See [`plan.md`](plan.md) for goals, milestones, and design decisions, and
-[`needs.md`](needs.md) for gaps in MOSAIC we work around (we don't modify it).
-
-**Status: M4 done (packaged + reproducible).** Dependency proven, config→env
-wrapper, feature layer, `AcceptAll`/`Random` baselines, and a `Rollout` planner
-(one-step lookahead via MOSAIC's deepcopy) with two modes — **oracle**
-(perfect-foresight upper bound) beats `AcceptAll` 91.7% vs 88.6% (+3.1pp, +7.2pp
-congested); **sampled** (honest, no foresight) trails the baseline and improves
-with more samples. A learned policy (**REINFORCE**) is next. See
-[`RESULTS.md`](RESULTS.md).
+Policies so far: `AcceptAll`/`Random` baselines and a `Rollout` planner (one-step
+lookahead via MOSAIC's deepcopy). Benchmark numbers are in [`RESULTS.md`](RESULTS.md).
 
 ## Access to MOSAIC (private repo)
 
@@ -179,3 +171,11 @@ tests/            offline scenario/feature/policy tests + network-marked env/eva
 
 The Gymnasium adapter (for SB3/RLlib) is intentionally deferred — see
 `needs.md`. Our v0 policies drive MOSAIC's env directly.
+
+## Roadmap
+
+Done: install + env wrapper, feature layer, `AcceptAll`/`Random` baselines, and a
+`Rollout` planner (oracle beats `AcceptAll`; the honest sampled variant trails and
+improves with more samples). **Next: a learned policy (REINFORCE)** — deployable,
+foresight-free, decides from the feature vector alone. Design notes and milestones
+live in [`plan.md`](plan.md); MOSAIC gaps we work around are in [`needs.md`](needs.md).
