@@ -1,241 +1,223 @@
 # MultiModal-DVRP-RL — plan
 
 A standalone repo that installs the **MOSAIC** simulator as a pip dependency and
-learns a dispatch **policy** (RL or MCTS) against it. The MOSAIC engine is the
-*environment*; this repo owns only the learning code.
+learns a dispatch **policy** against it. MOSAIC is the *environment*; this repo
+owns only the learning code. We never modify MOSAIC (gaps → `needs.md`).
 
 > **Prime directive:** anyone can `git clone` this repo, follow the README, and
-> run a learning agent against the MOSAIC engine — on a small area with uniform
-> demand — in one command, without touching the MOSAIC source or its backend.
+> run a policy against the MOSAIC engine — on a small area with uniform demand —
+> in one command, without touching the MOSAIC source or its backend.
+
+**Status:** M0–M4 + M3+ done (see Progress log). On-demand accept/reject is
+built, benchmarked, and packaged. Two candidate next milestones: **M3++**
+(geometric features, to actually beat accept-all) and **M6** (fixed-line-only
+scenario — detailed below).
 
 ## Goal / non-goals
 
-**Goal (v0):** train + evaluate a simple learned policy for the **`on_demand_only`**
-setting and show it beats a naive baseline on service rate, reproducibly.
+**Goal (v0):** evaluate policies for the **`on_demand_only`** setting and show,
+reproducibly, how each compares to a naive baseline on service rate.
 
-**Non-goals (v0):** multimodal/transit, real MOVE-OD demand, GTFS, the MOSAIC
-API/DB/frontend, large cities, distributed training, SOTA algorithms. Keep it
-small and legible; leave hooks to grow.
+**Non-goals (v0):** real MOVE-OD demand, the MOSAIC API/DB/frontend, large
+cities, distributed training, SOTA algorithms. Keep it small and legible.
+*Transit was a v0 non-goal; **M6 brings fixed-line into scope** — but only as a
+runnable scenario using MOSAIC's stock policy, not a learned transit policy.*
 
-## Dependency on MOSAIC (the environment)
+## Dependency on MOSAIC (verified facts)
 
-- Install the **pre-release rc** as a git dependency (base install — **no**
-  backend/uvicorn/DB; those are the `[api]` extra and are not needed):
-  ```toml
-  # pyproject.toml
-  dependencies = [
-    "dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1-rc.1",
-    "numpy>=1.26",
-  ]
-  # optional: dvrp-gym[ortools] only if we want the OR-Tools solver baseline
-  ```
-- **Pin the exact rc tag** (`v0.1.1-rc.1`), never a moving branch. Bump the pin
-  when MOSAIC cuts a newer rc / the real `v0.1.1`. (Same-version reinstalls need
-  `pip install --force-reinstall …@<ref>`.)
-- Public entry points we rely on:
-  - `from dvrp_core.env.library import make_env` — build a ready-to-step env.
-  - `from dvrp_core.policy import Policy` — base class for our learned policy.
-  - `make_env(spec, policy=<Policy instance>)` — **injection hook**: pass our
-    policy and reuse MOSAIC's scenario/geography/demand/solver plumbing.
-  - `env.reset()` → `State`; `env.step(action)` → `(state, reward, done, info)`
-    (legacy 4-tuple); `env.drain()`, `env.metrics`.
-- First run downloads the OSM graph for our polygon via `osmnx` and caches it
-  under `cache/` — so keep the area **small** (fast all-pairs precompute).
+- Pinned git dependency, base install (no `[api]` backend/DB extra):
+  `dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1-rc.1`.
+  Hatchling needs `[tool.hatch.metadata] allow-direct-references = true`.
+- **Pin the exact rc tag**, never a moving branch. Same-version re-pull needs
+  `pip install --force-reinstall`.
+- Entry points we rely on:
+  - `make_env(spec, *, solver, policy, demand, seed, cache_dir) -> (env, policy)`
+    from `dvrp_core.env.library` — `policy` may be a **`Policy` instance** (our
+    injection hook) or a registered name.
+  - `Policy.create_trips(state) -> Action`; `env.reset()`, `env.step(action)`
+    → 4-tuple, `env.drain()`, `env.close()`, `env.metrics.service_rate`.
+- `served_requests` increments **at dispatch** (not dropoff), so a rollout needs
+  no `drain()`. Requests are generated **lazily inside `step`**.
+- First run fetches the OSM graph via `osmnx` into `cache/` (git-ignored);
+  travel times are computed lazily, so area size affects fetch, not an upfront
+  all-pairs cost. Keep areas small anyway.
 
-## The environment / scenario (v0)
+## Scenarios (configs/)
 
-- **Demand:** `uniform` (seed-reproducible; good for train/eval splits by seed).
-- **Area (small, fast):** default to a compact box; target **Binghampton,
-  Memphis** (a ~2 km neighborhood). *TODO: finalize the polygon* — approximate
-  bbox ≈ lat 35.14–35.16, lon −89.99…−89.95; verify against the real neighborhood
-  before committing. Fallback: the Nashville box from MOSAIC's quickstart (known-good).
-- **Fleet:** 1 depot inside the polygon, a few vehicles (e.g. 3 × cap 4). Depot
-  location + fleet size are config, not hardcoded.
-- All of the above lives in a single `spec` dict + a config file — one place to edit.
+| Config | Area | Demand | Purpose |
+|---|---|---|---|
+| `binghampton.yaml` | ~2 km Memphis box | `uniform`, rate 0.02 | default; the headline numbers |
+| `binghampton_congested.yaml` | same | `uniform`, rate 0.06 (3×) | saturated fleet — where accept-all is weak |
+| `nashville.yaml` | MOSAIC quickstart box | `uniform` | known-good fallback |
+
+Each carries a depot + fleet and disjoint `seeds.train` / `seeds.eval`.
+*Open:* the Binghampton polygon is still the plan's approximate bbox, not a
+verified neighborhood boundary.
 
 ## The learning problem (on_demand_only)
 
-Per step, MOSAIC hands the policy `state.new_request` (a `Request`) plus the fleet
-(`state.vehicles`, `state.accepted_trips`). For `on_demand_only`, `create_trips(state)`
-returns **a `Trip` (accept — the greedy solver then inserts it) or `None` (reject)**.
-So the learned decision is essentially **accept / reject each incoming request** to
-maximize service quality; insertion is delegated to the solver.
+Per step MOSAIC hands the policy `state.new_request` plus the fleet. The action
+is **a `Trip` (accept — the greedy solver then inserts it) or `None` (reject)**;
+insertion and vehicle choice are the *solver's* job, not the policy's. An
+accepted trip can still be rejected by the solver if no feasible insertion
+exists — which is why accept-all is ~88.6%, not 100%.
 
-- **Observation / features** (`features.py`): request OD + direct drive time,
-  current time, fleet utilization (idle vs busy), nearest-vehicle slack, accepted
-  load, etc. Keep a small, documented feature vector.
-- **Action:** binary (accept / reject) for v0. (Later: which-vehicle / insertion hints.)
-- **Reward — a real design task, flag early:** the env's raw per-step reward is
-  `1.0` on accept / `0.0` on reject, which naively rewards "accept everything."
-  v0 options to evaluate: (a) end-of-episode `service_rate` as the objective
-  (episodic REINFORCE/return), (b) a shaped per-step signal via the event bus
-  (`event_bus=` on `DVRPEnv`) penalizing infeasible/late service (VMT, wait). Pick
-  one, document it, and sanity-check that "accept-all" is *not* trivially optimal.
+- **Features** (`features.py`): 4 geography-free values — recovered direct trip
+  time (from the request's time window) + fleet busy-fraction / occupancy /
+  mean-manifest. Locations in `State` are opaque graph-node indices with no
+  lat/lon and no geography handle (see `needs.md`), so geometric features are
+  currently out of reach for a policy.
+- **Reward (resolved):** end-of-episode `service_rate` as the return. Verified
+  that accept-all is **not** trivially optimal (88.6% uncongested; 42.9% under
+  3× demand), so there is real headroom to reject well.
 
-## Approaches (implement one simple one first; keep both structured)
+## Milestones
 
-1. **Baselines (always build these first — they define "beat the baseline"):**
-   - `AcceptAll` and `Random` policies (MOSAIC `Policy` subclasses). Establishes
-     the reference `service_rate` the learner must beat.
-2. **MCTS / rollout policy (recommended v0 — no training infra):** for each
-   incoming request, use `copy.deepcopy(env)` to roll out "accept" vs "reject"
-   with a base policy a few steps ahead, pick the higher-value branch. Directly
-   exercises MOSAIC's deepcopy-for-planning capability; no gradients, easy to reason about.
-3. **Simple RL policy:** a small featurized value/Q function (tabular or a
-   1–2-layer MLP) trained with episodic REINFORCE or DQN on the accept/reject
-   decision. Optional Gymnasium adapter (see below) to use SB3/RLlib later.
+**Done:** M0 bootstrap · M1 env + features · M2 baselines + eval harness ·
+M3 rollout planner · M3+ REINFORCE · M4 packaging. Details in the Progress log.
 
-Ship **one** end to end (2 or 3) that beats the baseline; structure the code so the
-other slots in.
+**M3++ (candidate) — geometric features.** Give the learner nearest-vehicle
+slack / insertion detour cost via the `env._geography` hook (`needs.md`) so it
+can tell "this request blocks others" *without* foresight. Bounded upside: a
+deployable policy can at best approach the K→∞ sampled-rollout limit, which is
+≥ accept-all but strictly below the oracle — so expect a marginal win
+uncongested and a plausible real win under congestion. *Exit:* a deployable
+policy that beats accept-all on held-out seeds, at least in the congested config.
 
-## Gymnasium adapter (only if/when we use SB3/RLlib)
+**M5 (optional) — SB3/RLlib via a Gymnasium adapter.** Deferred: `DVRPEnv` is
+not a `gymnasium.Env` (bare-`State` reset, 4-tuple step, no spaces). If we adopt
+SB3 we own a thin adapter in *this* repo. Not built — no consumer yet.
 
-MOSAIC's `DVRPEnv` is not a `gymnasium.Env`: `step` is a 4-tuple `(state, reward,
-done, info)`, `reset` returns a bare `State`, and there are no spaces. If we adopt
-SB3/RLlib, this repo owns a thin `GymnasiumAdapter`: `reset()→(obs, info)`,
-`step()→(obs, reward, terminated, truncated, info)`, define `observation_space`
-(the feature vector) + `action_space` (Discrete(2)), and host `State`→features /
-action-decode. Keep `gymnasium`/SB3 as **this repo's** deps, never MOSAIC's.
+## M6 — Fixed-line-only scenario (planned)
 
-## Proposed repo structure
+Run MOSAIC's **stock** `fixed_line_only` policy as its own scenario: passengers
+are served by bus routes with walking legs, **no on-demand vehicles at all**.
 
-```
-MultiModal-DVRP-RL/
-  pyproject.toml            # deps incl. dvrp-gym @ …@v0.1.1-rc.1
-  README.md                 # clone → install → run (the prime directive)
-  plan.md                   # this
-  configs/
-    binghampton.yaml         # polygon, depot, fleet, demand, seeds
-  src/dvrp_rl/
-    __init__.py
-    scenario.py             # build the spec dict from config (uniform, small area)
-    env.py                  # make_env wrapper; optional GymnasiumAdapter
-    features.py             # State → feature vector
-    policies/
-      __init__.py
-      baseline.py           # AcceptAll, Random (Policy subclasses)
-      mcts.py               # rollout/MCTS accept-reject policy
-      rl.py                 # simple RL policy + trainer
-    train.py                # training / rollout driver
-    evaluate.py             # run N seeds, report service_rate + metrics; compare policies
-  examples/
-    run_demo.py             # the one-command entry the README points to
-  tests/
-    test_scenario.py        # spec builds; depot inside polygon
-    test_env.py             # env builds + steps; injected policy is used
-    test_policies.py        # each policy returns a valid Action (Trip|None)
-    test_smoke.py           # short end-to-end episode + drain + metrics
-  .github/workflows/ci.yml  # lint + typecheck + pytest (smoke uses a tiny cached area)
-```
+### What MOSAIC already gives us (no code)
 
-## Milestones (each gated by the quality workflow below)
+`make_env(policy="fixed_line_only")` wires everything: GTFS loading, a
+`StopTransferIndex`, and a journey planner (`raptor_enumerative` default, or
+`raptor` / `direct`). `FixedLineOnlyPolicy` is a thin adapter over the planner —
+it requests a walk→bus→walk journey and enforces `max_walk_time`,
+`max_wait_time`, and `latest_dropoff`, returning `None` when infeasible. Actions
+are `FixedLineLeg` (single bus) or `FixedLineJourney` (with transfers).
 
-- **M0 — Bootstrap + prove the dependency.** Repo skeleton, `pyproject` pinning
-  `v0.1.1-rc.1`, README stub, CI. Smoke test: install MOSAIC, `make_env(spec)`,
-  run one short uniform episode with the default policy, assert metrics exist.
-  *Exit:* `pip install` from the git tag works; one command runs an episode.
-- **M1 — Env + features layer.** `scenario.py`, `env.py` (+ optional Gym adapter),
-  `features.py`. Tests for spec/depot/feature shapes.
-- **M2 — Baselines + evaluation harness.** `AcceptAll`/`Random`, `evaluate.py`
-  reporting `service_rate` across seeds. Establishes the baseline number.
-- **M3 — One learned policy beats the baseline.** MCTS-rollout (recommended) or
-  simple RL, wired via `make_env(policy=…)`. Show a clear service-rate lift vs M2.
-- **M3+ — Deployable learned policy (REINFORCE).** A small policy-gradient
-  learner (logistic / 1–2-layer MLP) over `features.py` (geography-free) that
-  decides accept/reject from the *current* state only — no env cloning, no
-  foresight. Trained on the true demand distribution to amortize what the
-  sampled rollout does expensively per-decision. *Exit:* a deployable (no-oracle)
-  policy that beats `AcceptAll` on eval seeds, wired via `make_env(policy=…)`.
-- **M4 — README walkthrough + reproducibility + demo notebook.** Anyone clones →
-  installs → `python examples/run_demo.py` → sees a policy evaluate and beat the
-  baseline. Partly done (reproducibility section + configs that reproduce
-  RESULTS.md). Remaining steps (do BEFORE M3+):
-  1. **README — MOSAIC install via pip+git.** Document *both* auth paths, since
-     org membership grants access but git still needs a credential: (a) SSH — the
-     `git+ssh://` URL in `pyproject`, requires an SSH key on your (org-member)
-     account (`ssh -T git@github.com`); (b) HTTPS+token — for org members who
-     don't use SSH. Include the exact `uv`/`pip` commands, `allow-direct-references`,
-     same-version `--force-reinstall`, and a private-repo 403/permission troubleshooting note.
-  2. **README — usage.** `run_demo` description (OSM first-run/cache, expected
-     output); policy usage incl. `oracle=True` vs sampled (`n_samples`, `horizon`,
-     `sample_seed`), what each means, and the deterministic-demand guard.
-  3. **`notebooks/demo.ipynb`** — markdown + commented cells, sectioned:
-     setup/build-env, one demo episode, baselines (AcceptAll/Random via
-     `evaluate`), fast MCTS demo (oracle + sampled at tiny horizon/steps — for
-     demonstration, not benchmarking), pointer to RESULTS.md + REINFORCE next.
-     Add a `[notebook]` extra (jupyter/nbconvert); verify via `nbconvert --execute`.
-  4. **Packaging.** Fresh-venv clean-install test (prime directive), OSM-cache
-     note for fresh clones/CI, README layout/status → M4, plan.md progress update.
-  *Verify:* clean `uv venv` + install + `run_demo` from scratch; notebook executes.
-- **M5 (optional) — Second approach / SB3 via the Gym adapter.**
+### What we must build (small — ~40 lines)
+
+1. **`scenario.build_spec` transit passthrough** — currently emits *nothing*
+   transit-related. Add `gtfs_path` (required) plus `service_day`,
+   `bus_capacity`, `gtfs_routes` filter, `journey_planner`, and `start_time`.
+2. **`configs/<city>_transit.yaml`** — polygon that actually contains routes, a
+   dummy depot, GTFS path + service day, daytime `start_time`.
+3. **Config-driven policy selection** — `make_env_from_config` hardcodes the
+   default `on_demand_only`; read `policy` from the config so a run can pick
+   fixed-line.
+4. **Tests** — offline: spec includes the transit keys. Network: a fixed-line
+   episode produces journeys and non-zero metrics.
+
+### Gotchas — and whether MOSAIC needs changing (it doesn't)
+
+| Gotcha | Fix | Needs a MOSAIC change? |
+|---|---|---|
+| Sim starts at **midnight** (`start_time` defaults to `0.0`) but GTFS is time-of-day → **every request rejected** | pass `start_time` (e.g. `28800` = 08:00) in the spec | **No** — already a spec key; ours to set |
+| `_validate` requires **≥1 depot** even with no on-demand | pass a dummy depot with `num_vehicles: 0` — **verified: env builds and steps with 0 vehicles** | **No** — workaround is free |
+| Polygon must contain bus routes; `make_env` **raises** if zero load (stops are bbox-filtered) | choose a wider polygon over real routes | **No** — not a bug; the error is already clear |
+
+So M6 needs **no upstream change** — every gotcha is config/spec-level on our
+side. Two upstream *niceties* are logged in `needs.md` (a warning when transit
+is loaded but `start_time` is outside service hours; relaxing the depot
+requirement for transit-only policies), but neither blocks us.
+
+### Honest expectations
+
+- **Service rate will be low** — likely far below the ~88% on-demand baseline.
+  Fixed-line can only serve OD pairs aligned with routes *and* schedules, while
+  our demand is uniform over the polygon. That's a correct result, not a bug: it
+  is a **different scenario, not comparable** to the on-demand baseline. Using
+  MOSAIC's `demand="file"` (real OD) would make it more meaningful.
+- **Our learning layer does not transfer.** Actions are `FixedLineLeg`/
+  `FixedLineJourney`, not `Trip`, so `AcceptRejectPolicy` doesn't apply; and
+  `features.py`'s fleet features are meaningless with no vehicles. A *learned*
+  fixed-line policy needs a new action space + features — a separate milestone.
+
+### Phases
+
+| # | Work | Verify | Est. |
+|---|---|---|---|
+| 1 | Source a GTFS feed (Memphis MATA / Nashville WeGo); pick a polygon containing routes | feed loads, >0 routes in bbox | 30–60 min |
+| 2 | `build_spec` transit keys + config-driven `policy` + transit YAML | offline spec test | 20 min |
+| 3 | Get one episode running (schedule/`start_time`/service-day debugging lands here) | non-zero served journeys | 30–60 min |
+| 4 | Tests + document as its own scenario in RESULTS/README | suite green | 30 min |
+
+**~2–3 hours**, dominated by phases 1 and 3 (feed sourcing + schedule
+alignment), not the code.
+
+### Decisions needed before starting
+
+1. **Which GTFS feed / city?** Memphis MATA suits the Binghampton area; Nashville
+   WeGo suits `nashville.yaml`. Do we have a feed, or fetch a public one — and do
+   we commit it or keep `data/` untracked and document the download?
+2. **Scope:** stock `fixed_line_only` only (cheap), or also a *learned*
+   fixed-line policy (much larger — new action space + features)?
 
 ## Progress log
 
 - **M0 ✅** Repo skeleton, `pyproject` pinning `v0.1.1-rc.1`, README, smoke test.
-  Proven: install works, `run_demo.py` runs one episode.
+  Install works; `run_demo.py` runs one episode.
 - **M1 ✅** `scenario.py`, `env.py` (config→env), `features.py` (4-feature,
-  geography-free vector). Gym adapter deferred (see needs.md), not built.
+  geography-free vector). Gym adapter deferred (see `needs.md`), not built.
 - **M2 ✅** `AcceptAll`/`Random` baselines + `evaluate.py`. Baseline established.
 - **M3 ✅ (with an honest caveat)** `RolloutPolicy` — one-step lookahead via
   MOSAIC deepcopy. Verify-fleet (2 testers + 2 reviewers) confirmed the code
   correct. Two modes:
   - *oracle* (perfect future foresight): beats `AcceptAll` +3.1pp (Binghampton),
     +7.2pp congested — the planning ceiling, **not deployable**.
-  - *sampled* (default; reseeds demand RNG → plans against sampled, not-real
-    futures): the honest, deployable-style planner. Currently *trails* AcceptAll
-    (−6.9pp at K=5) because it sacrifices real requests for hypothetical ones;
-    the gap shrinks with more samples (−2.7pp at K=20). Motivates M3+.
-  See RESULTS.md for numbers. Repo public: github.com/jptalusan/MultiModal-DVRP-RL.
+  - *sampled* (default; reseeds the demand RNG → plans against sampled, not-real
+    futures): the honest, deployable-style planner. *Trails* AcceptAll (−6.9pp at
+    K=5); the gap shrinks with more samples (−2.7pp at K=20). A second fleet
+    (tester + reviewer) confirmed it is genuinely non-oracle and reproducible,
+    and flagged the deterministic-demand trap now guarded in `bind_env`.
 - **M4 ✅** Packaging: README overhaul (MOSAIC pip+git install with *both* SSH and
-  HTTPS-token auth paths, `run_demo`/`evaluate` usage, `oracle` vs sampled docs);
-  `notebooks/demo.ipynb` (env → episode → baselines → fast rollout, commented) with
-  a `[notebook]` extra, executed clean via `nbconvert`; fresh-venv clean install +
-  `run_demo` verified from scratch (prime directive holds).
-- **M3+ ✅ (honest negative result)** `ReinforcePolicy` (deployable linear-logistic
-  policy over the geography-free features, decides from the current state only —
+  HTTPS-token auth paths, usage docs, `oracle` vs sampled); `notebooks/demo.ipynb`
+  (env → episode → baselines → fast rollout) with a `[notebook]` extra, executed
+  clean via `nbconvert`; fresh-venv clean install + `run_demo` verified from
+  scratch (prime directive holds).
+- **M3+ ✅ (honest negative result)** `ReinforcePolicy` (deployable
+  linear-logistic policy over the geography-free features — current state only,
   no foresight/cloning) + `train.py` (REINFORCE, EMA baseline, train/eval seed
   split). Robustly **converges to accept-all and ties the baseline (88.6%); does
   not beat it** — across warm-start/lr/entropy/episode sweeps it either matches
-  accept-all or over-rejects. Accept-all is near-optimal here; the beneficial-
-  reject signal needs foresight (oracle) or richer *geometric* features. The
+  accept-all or over-rejects. Accept-all is near-optimal here; the
+  beneficial-reject signal needs foresight or richer *geometric* features. The
   deployable-learner infrastructure is in place and correct.
-- **M3++ (proposed next) — geometric features.** Give the learner nearest-vehicle
-  slack / insertion detour cost (via the `env._geography` hook in needs.md) so it
-  can discriminate "this request blocks others" without foresight. The concrete
-  lever to actually beat accept-all.
-- **M5 (optional)** — SB3/RLlib via the Gym adapter. Pending.
+- Repo public: github.com/jptalusan/MultiModal-DVRP-RL.
+- **Next:** M3++ (geometric features) and/or M6 (fixed-line). M5 optional.
 
-## Development workflow — the full repertoire (required per milestone)
+## Development workflow (per milestone)
 
-Mirror MOSAIC's own process. For every milestone:
+1. **Plan** before non-trivial code — assumptions, tradeoffs, a verify step per
+   item. Keep this file current.
+2. **Implement** in small, surgical changes matching existing structure.
+3. **Test.** Offline unit tests + a network integration test. A change isn't done
+   until a test proves the goal.
+4. **Review.** `/code-review` per diff; `/simplify` for cleanup-only passes.
+5. **Verify-fleet** for anything claiming "the policy learns/wins" — independent
+   testers (reward hacking, degenerate accept-all, seed leakage, non-determinism)
+   + reviewers, then synthesize.
+6. **Report** in the succinct `report` format; append benchmark rows to
+   `RESULTS.md`.
 
-1. **Plan.** Use the `plan` skill / EnterPlanMode before non-trivial code — state
-   assumptions, tradeoffs, and a verify step per item. Update this `plan.md` as
-   scope firms up.
-2. **Implement in small PRs**, surgical changes, matching structure.
-3. **Test.** Unit (scenario/env/features/policy validity) + integration (short
-   episode) + a CI smoke test. A change isn't done until tests prove the goal
-   (e.g. M3: an automated test asserts learner service_rate ≥ baseline).
-4. **Review.** `/code-review` on each diff (correctness + simplification); `/simplify`
-   for cleanup-only passes.
-5. **Verify-fleet.** Before merging M3+ (the learning milestones), run
-   `/verify-fleet` — independent testers (try to break: reward hacking, degenerate
-   accept-all, seed leakage, non-determinism) + reviewers (correctness/design), then
-   synthesize. High-assurance gate for anything claiming "the policy learns."
-6. **Report.** Close each milestone with the succinct `report` format (what changed,
-   test result, review verdict, follow-ups, agent count).
+## Risks / open questions
 
-## Risks / open questions to resolve early
-
-- **Reward design** — the #1 modeling risk (accept-all must not be trivially
-  optimal). Decide the objective in M2/M3.
-- **Determinism** — MOSAIC has a flagged seed-reproducibility anomaly for uniform
-  demand across fresh runs (possible graph-build nondeterminism). Confirm our
-  train/eval seeds are reproducible *within a cached graph*; pin the cache.
-- **Binghampton polygon** — finalize the exact boundary; keep it small for fast
-  all-pairs.
-- **First-run OSM fetch** — needs network once; document it and commit/ship a
-  cache strategy so CI + fresh clones aren't slow or network-flaky.
+- **Binghampton polygon** — still the approximate bbox; finalize against the real
+  neighborhood (keep it small).
+- **CI can't install MOSAIC** — private repo needs a deploy key / token, so
+  network-marked tests are excluded from CI. Deferred deliberately.
+- **First-run OSM fetch** — needs network once; `cache/` is git-ignored, so fresh
+  clones and CI pay for it. Consider a shipped cache if CI ever runs them.
 - **rc pin churn** — track MOSAIC rc/release bumps; re-pin deliberately.
-- **Action space growth** — v0 is accept/reject; document the path to
-  which-vehicle / insertion decisions without rewriting the interface.
+- **Beating accept-all without foresight** — open. Bounded by the K→∞ rollout
+  limit; geometric features (M3++) are the concrete lever, congestion the regime
+  where it should matter.
+- **Action space growth** — accept/reject today; which-vehicle / insertion hints
+  (and transit actions, M6) would need interface work.

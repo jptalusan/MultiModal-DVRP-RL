@@ -60,3 +60,23 @@ REINFORCE) drive the env directly, so we do **not** need this yet. If we
 adopt SB3/RLlib later (plan M5), we write a `GymnasiumAdapter` in *this*
 repo (features → `observation_space`, accept/reject → `Discrete(2)`).
 Not a MOSAIC change — just noting why the adapter is deferred.
+
+## 3. Transit-scenario papercuts (nice-to-have, not blockers)
+
+Found while planning the fixed-line milestone (plan M6). **Neither blocks
+us** — both have free workarounds on our side — but both are easy footguns
+for anyone standing up a transit-only run:
+
+- **`start_time` defaults to midnight.** `make_env` uses
+  `spec.get("start_time", 0.0)`, but GTFS is time-of-day, so with a transit
+  policy and the default start time *every* request is rejected (no service
+  at 00:00) with no hint as to why. *Workaround:* pass a daytime
+  `start_time` (e.g. `28800` = 08:00). *Upstream nicety:* warn (or raise)
+  when transit routes are loaded and `start_time` falls outside the feed's
+  service hours.
+- **A depot is required even for transit-only runs.** `_validate` demands
+  `depots` with ≥1 entry regardless of the policy, though a
+  `fixed_line_only` run uses no on-demand vehicles. *Workaround:* pass a
+  dummy depot with `num_vehicles: 0` — verified this builds and steps fine.
+  *Upstream nicety:* relax the depot requirement (or make it
+  policy-dependent) for transit-only policies.
