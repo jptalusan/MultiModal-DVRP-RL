@@ -453,7 +453,7 @@ wheels = [
 [[package]]
 name = "dvrp-gym"
 version = "0.1.1"
-source = { git = "ssh://git@github.com/smarttransit-ai/MOSAIC.git?rev=v0.1.1-rc.1#c773acdafd220a10feabdf86081debf5b6dc28cd" }
+source = { git = "ssh://git@github.com/smarttransit-ai/MOSAIC.git?rev=v0.1.1#edca98bb53138feedbf9e5f9483b2e2a333c0175" }
 dependencies = [
     { name = "geopy" },
     { name = "h3" },
@@ -1065,7 +1065,7 @@ notebook = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dvrp-gym", git = "ssh://git@github.com/smarttransit-ai/MOSAIC.git?rev=v0.1.1-rc.1" },
+    { name = "dvrp-gym", git = "ssh://git@github.com/smarttransit-ai/MOSAIC.git?rev=v0.1.1" },
     { name = "ipykernel", marker = "extra == 'notebook'", specifier = ">=6.0" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.0" },
     { name = "nbconvert", marker = "extra == 'notebook'", specifier = ">=7.0" },

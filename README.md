@@ -14,7 +14,7 @@ lookahead via MOSAIC's deepcopy). Benchmark numbers are in [`RESULTS.md`](RESULT
 
 ## Access to MOSAIC (private repo)
 
-MOSAIC is private. The dependency is pinned to the tag `v0.1.1-rc.1`. Being a
+MOSAIC is private. The dependency is pinned to the tag `v0.1.1`. Being a
 member of the `smarttransit-ai` org grants **access**, but `git` still needs a
 **credential** to authenticate the clone. Two paths — pick whichever you already
 use with GitHub:
@@ -57,7 +57,7 @@ pip install -e ".[dev]"
 ```
 
 This pulls MOSAIC (`dvrp-gym`) from the pinned git tag (the base install — no
-backend/DB). To move to a newer MOSAIC rc, bump the tag in `pyproject.toml` and
+backend/DB). To move to a newer MOSAIC release, bump the tag in `pyproject.toml` and
 reinstall; for a *same-version* re-pull use `pip install --force-reinstall`.
 
 ## Run the demo (one command)
@@ -135,7 +135,7 @@ Sampled mode **requires stochastic demand** (e.g. `uniform`): on deterministic
 
 The numbers in [`RESULTS.md`](RESULTS.md) come straight from `python -m
 dvrp_rl.evaluate`. On `configs/binghampton.yaml` (eval seeds `[100…104]`, 300
-steps/episode, MOSAIC `v0.1.1-rc.1`, `greedy` solver) you should see roughly:
+steps/episode, MOSAIC `v0.1.1`, `greedy` solver) you should see roughly:
 
 ```
 AcceptAll               service_rate: 88.6% ± 2.3%

@@ -26,9 +26,9 @@ runnable scenario using MOSAIC's stock policy, not a learned transit policy.*
 ## Dependency on MOSAIC (verified facts)
 
 - Pinned git dependency, base install (no `[api]` backend/DB extra):
-  `dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1-rc.1`.
+  `dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1`.
   Hatchling needs `[tool.hatch.metadata] allow-direct-references = true`.
-- **Pin the exact rc tag**, never a moving branch. Same-version re-pull needs
+- **Pin the exact release tag**, never a moving branch. Same-version re-pull needs
   `pip install --force-reinstall`.
 - Entry points we rely on:
   - `make_env(spec, *, solver, policy, demand, seed, cache_dir) -> (env, policy)`

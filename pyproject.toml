@@ -4,10 +4,10 @@ version = "0.0.1"
 description = "Learn a dispatch policy (RL/MCTS) against the MOSAIC DVRP simulator."
 requires-python = ">=3.12"
 dependencies = [
-    # The MOSAIC simulator IS our environment. Pin the exact rc tag — never a
-    # moving branch. Bump deliberately when MOSAIC cuts a newer rc / real v0.1.1.
+    # The MOSAIC simulator IS our environment. Pin the exact release tag — never
+    # a moving branch. Bump deliberately when MOSAIC cuts a newer release.
     # Base install only: no [api] extra (backend/uvicorn/DB) — we don't need it.
-    "dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1-rc.1",
+    "dvrp-gym @ git+ssh://git@github.com/smarttransit-ai/MOSAIC.git@v0.1.1",
     "numpy>=1.26",
     "pyyaml>=6.0",
 ]

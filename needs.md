@@ -1,9 +1,9 @@
 # needs.md — gaps in the MOSAIC package we consume
 
-We treat MOSAIC (`dvrp-gym`, pinned at `v0.1.1-rc.1`) as a read-only
+We treat MOSAIC (`dvrp-gym`, pinned at `v0.1.1`) as a read-only
 dependency: we do **not** modify it. This file records places where the
 public API doesn't give us something we'd want, and the workaround we
-adopted. It's a wishlist to raise upstream / revisit on the next rc — not
+adopted. It's a wishlist to raise upstream / revisit on the next release — not
 a bug tracker.
 
 ## 1. No geometry / geography access from inside a policy

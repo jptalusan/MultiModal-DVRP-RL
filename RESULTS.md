@@ -25,7 +25,7 @@ MOSAIC's `env.metrics.service_rate` = served requests / total requests
 
 - Area: ~2 km Memphis box (approximate — see plan.md). Depot: 1, fleet 3 × cap 4.
 - Demand: `uniform`, `request_rate=0.02`. Eval seeds `[100…104]` (5). 300 steps/episode.
-- Environment: MOSAIC `dvrp-gym @ v0.1.1-rc.1`, solver `greedy`.
+- Environment: MOSAIC `dvrp-gym @ v0.1.1`, solver `greedy`.
 
 | Policy | Service rate (mean ± sample std) | vs AcceptAll | Notes |
 |---|---|---|---|
