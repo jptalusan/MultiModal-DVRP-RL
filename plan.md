@@ -9,19 +9,18 @@ owns only the learning code. We never modify MOSAIC (gaps → `needs.md`).
 > in one command, without touching the MOSAIC source or its backend.
 
 **Status:** M0–M4 + M3+ done (see Progress log). On-demand accept/reject is
-built, benchmarked, and packaged. Two candidate next milestones: **M3++**
-(geometric features, to actually beat accept-all) and **M6** (fixed-line-only
-scenario — detailed below).
+built, benchmarked, and packaged. Next candidate: **M3++** (geometric features, to
+actually beat accept-all). Fixed-line transit is deferred and tracked in
+[issue #1](https://github.com/jptalusan/MultiModal-DVRP-RL/issues/1).
 
 ## Goal / non-goals
 
 **Goal (v0):** evaluate policies for the **`on_demand_only`** setting and show,
 reproducibly, how each compares to a naive baseline on service rate.
 
-**Non-goals (v0):** real MOVE-OD demand, the MOSAIC API/DB/frontend, large
-cities, distributed training, SOTA algorithms. Keep it small and legible.
-*Transit was a v0 non-goal; **M6 brings fixed-line into scope** — but only as a
-runnable scenario using MOSAIC's stock policy, not a learned transit policy.*
+**Non-goals (v0):** transit/fixed-line (deferred → issue #1), real MOVE-OD demand,
+the MOSAIC API/DB/frontend, large cities, distributed training, SOTA algorithms.
+Keep it small and legible.
 
 ## Dependency on MOSAIC (verified facts)
 
@@ -88,77 +87,19 @@ policy that beats accept-all on held-out seeds, at least in the congested config
 not a `gymnasium.Env` (bare-`State` reset, 4-tuple step, no spaces). If we adopt
 SB3 we own a thin adapter in *this* repo. Not built — no consumer yet.
 
-## M6 — Fixed-line-only scenario (planned)
+## M6 — Fixed-line transit (deferred → issue #1)
 
-Run MOSAIC's **stock** `fixed_line_only` policy as its own scenario: passengers
-are served by bus routes with walking legs, **no on-demand vehicles at all**.
+Running MOSAIC's stock `fixed_line_only` policy as its own scenario (buses +
+walking legs, no on-demand vehicles) is **deferred**. The full investigation —
+what MOSAIC provides for free, the ~40 lines we'd add, the three gotchas (none
+needing a MOSAIC change), honest expectations, phases, and open decisions — lives
+in [issue #1](https://github.com/jptalusan/MultiModal-DVRP-RL/issues/1).
 
-### What MOSAIC already gives us (no code)
-
-`make_env(policy="fixed_line_only")` wires everything: GTFS loading, a
-`StopTransferIndex`, and a journey planner (`raptor_enumerative` default, or
-`raptor` / `direct`). `FixedLineOnlyPolicy` is a thin adapter over the planner —
-it requests a walk→bus→walk journey and enforces `max_walk_time`,
-`max_wait_time`, and `latest_dropoff`, returning `None` when infeasible. Actions
-are `FixedLineLeg` (single bus) or `FixedLineJourney` (with transfers).
-
-### What we must build (small — ~40 lines)
-
-1. **`scenario.build_spec` transit passthrough** — currently emits *nothing*
-   transit-related. Add `gtfs_path` (required) plus `service_day`,
-   `bus_capacity`, `gtfs_routes` filter, `journey_planner`, and `start_time`.
-2. **`configs/<city>_transit.yaml`** — polygon that actually contains routes, a
-   dummy depot, GTFS path + service day, daytime `start_time`.
-3. **Config-driven policy selection** — `make_env_from_config` hardcodes the
-   default `on_demand_only`; read `policy` from the config so a run can pick
-   fixed-line.
-4. **Tests** — offline: spec includes the transit keys. Network: a fixed-line
-   episode produces journeys and non-zero metrics.
-
-### Gotchas — and whether MOSAIC needs changing (it doesn't)
-
-| Gotcha | Fix | Needs a MOSAIC change? |
-|---|---|---|
-| Sim starts at **midnight** (`start_time` defaults to `0.0`) but GTFS is time-of-day → **every request rejected** | pass `start_time` (e.g. `28800` = 08:00) in the spec | **No** — already a spec key; ours to set |
-| `_validate` requires **≥1 depot** even with no on-demand | pass a dummy depot with `num_vehicles: 0` — **verified: env builds and steps with 0 vehicles** | **No** — workaround is free |
-| Polygon must contain bus routes; `make_env` **raises** if zero load (stops are bbox-filtered) | choose a wider polygon over real routes | **No** — not a bug; the error is already clear |
-
-So M6 needs **no upstream change** — every gotcha is config/spec-level on our
-side. Two upstream *niceties* are logged in `needs.md` (a warning when transit
-is loaded but `start_time` is outside service hours; relaxing the depot
-requirement for transit-only policies), but neither blocks us.
-
-### Honest expectations
-
-- **Service rate will be low** — likely far below the ~88% on-demand baseline.
-  Fixed-line can only serve OD pairs aligned with routes *and* schedules, while
-  our demand is uniform over the polygon. That's a correct result, not a bug: it
-  is a **different scenario, not comparable** to the on-demand baseline. Using
-  MOSAIC's `demand="file"` (real OD) would make it more meaningful.
-- **Our learning layer does not transfer.** Actions are `FixedLineLeg`/
-  `FixedLineJourney`, not `Trip`, so `AcceptRejectPolicy` doesn't apply; and
-  `features.py`'s fleet features are meaningless with no vehicles. A *learned*
-  fixed-line policy needs a new action space + features — a separate milestone.
-
-### Phases
-
-| # | Work | Verify | Est. |
-|---|---|---|---|
-| 1 | Source a GTFS feed (Memphis MATA / Nashville WeGo); pick a polygon containing routes | feed loads, >0 routes in bbox | 30–60 min |
-| 2 | `build_spec` transit keys + config-driven `policy` + transit YAML | offline spec test | 20 min |
-| 3 | Get one episode running (schedule/`start_time`/service-day debugging lands here) | non-zero served journeys | 30–60 min |
-| 4 | Tests + document as its own scenario in RESULTS/README | suite green | 30 min |
-
-**~2–3 hours**, dominated by phases 1 and 3 (feed sourcing + schedule
-alignment), not the code.
-
-### Decisions needed before starting
-
-1. **Which GTFS feed / city?** Memphis MATA suits the Binghampton area; Nashville
-   WeGo suits `nashville.yaml`. Do we have a feed, or fetch a public one — and do
-   we commit it or keep `data/` untracked and document the download?
-2. **Scope:** stock `fixed_line_only` only (cheap), or also a *learned*
-   fixed-line policy (much larger — new action space + features)?
+Key points to remember: it needs a **GTFS feed** and a polygon that actually
+contains bus routes; the sim clock starts at **midnight**, so `start_time` must be
+set to a daytime value or everything is rejected; and results are **not comparable**
+to the on-demand baseline (uniform random demand vs fixed routes). Our accept/reject
+learning layer does **not** transfer — transit actions and features differ.
 
 ## Progress log
 
